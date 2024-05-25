@@ -1,15 +1,18 @@
-import pandas as pd
-from catboost import CatBoostClassifier, Pool
-from sklearn.model_selection import StratifiedKFold
-from sklearn.model_selection import cross_val_score
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-import category_encoders as ce
+import os
 import pickle
 
+import category_encoders as ce
+import pandas as pd
+from catboost import CatBoostClassifier, Pool
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import LabelEncoder
 
-import os
+from ..utils.utils import *
+
+
 def select_features_with_cv(df, n_splits=5):
     X = df.drop(["loan_status", "loan_id"], axis=1)
     y = df["loan_status"]
@@ -91,12 +94,13 @@ class EncoderEvaluator:
 
 
 class Preprocess:
-    def __init__(self, df, inference=False, encoder_path="src/koc_finans_case/artifacts/encoders/encoder.pkl"):
+    def __init__(self, df, inference=False):
         self.df = df.copy()
+
         self.categorical_features = ["education", "self_employed"]
         self.encoder_eval = EncoderEvaluator
         self.inference = inference
-        self.encoder_path = encoder_path
+        self.encoder_path = os.path.join(get_project_root(), "artifacts", "encoders", "encoder.pkl")
         self.encoders = {
             # 'onehot': OneHotEncoder(),
             'label': LabelEncoder(),
@@ -125,7 +129,8 @@ class Preprocess:
         return best_encoder
 
     def get_encoder(self, col):
-        with open("/".join(self.encoder_path.split("/")[:-1] + [f"{col}_{self.encoder_path.split('/')[-1]}"]), "rb") as f:
+        with open("/".join(self.encoder_path.split("/")[:-1] + [f"{col}_{self.encoder_path.split('/')[-1]}"]),
+                  "rb") as f:
             loaded_encoder = pickle.load(f)
 
         return loaded_encoder
@@ -189,4 +194,3 @@ class Preprocess:
         # self._object_to_category()
 
         return self.df
-

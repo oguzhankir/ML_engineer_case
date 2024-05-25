@@ -1,8 +1,10 @@
-from .model_manager import ModelManager
-import pandas as pd
-from ..utils.utils import get_config
-from .preprocess import Preprocess
 import numpy as np
+import pandas as pd
+
+from .model_manager import ModelManager
+from .preprocess import Preprocess
+from ..utils.utils import get_config
+
 
 class Inference:
     def __init__(self, config):
@@ -28,6 +30,3 @@ class Inference:
             probas.append(proba)
             preds.append(int(proba > config["fold_thresholds"][idx]))
         return int(np.mean(preds))
-
-
-

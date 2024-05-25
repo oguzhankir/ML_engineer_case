@@ -1,15 +1,18 @@
-from catboost import CatBoostClassifier
-from lightgbm import LGBMClassifier
-from xgboost import XGBClassifier
 import os
 import pickle
 
+from catboost import CatBoostClassifier
+from lightgbm import LGBMClassifier
+from xgboost import XGBClassifier
+
+from ..utils.utils import get_project_root
+
 
 class ModelManager:
-    def __init__(self, model_name, model_directory="src/koc_finans_case/artifacts/models", models=[]):
+    def __init__(self, model_name, models=[]):
         self.model_name = model_name
         self.models = models
-        self.model_directory = model_directory
+        self.model_directory = os.path.join(get_project_root(), "artifacts", 'models')
 
     def train_models(self, data, target, params, cv_splits):
         for train_idx, val_idx in cv_splits:
@@ -42,5 +45,3 @@ class ModelManager:
                 with open(os.path.join(self.model_directory, filename), 'rb') as file:
                     model = pickle.load(file)
                     self.models.append(model)
-
-
