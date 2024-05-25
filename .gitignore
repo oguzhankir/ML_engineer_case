@@ -20,3 +20,6 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+/notebooks/loan_approval_dataset.csv
+/notebooks/catboost_info/
+/notebooks/.ipynb_checkpoints/
