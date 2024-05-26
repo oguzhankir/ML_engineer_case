@@ -1,10 +1,6 @@
 
 ---
 
-# koc_finans_case
-
-This project is a case study for Koc Finans, involving the development of a machine learning model for a specific financial application.
-
 ## Folder Structure
 
 - **notebooks**: Contains Jupyter Notebooks used for data analysis and model development.
