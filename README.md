@@ -11,7 +11,7 @@
   - **data_analysis.ipynb**: Notebook for data analysis.
   
 - **src**: Source code for the project.
-  - **koc_finans_case**: Main module.
+  - **ml_engineer_case**: Main module.
     - **api**: Contains API routers and request DTOs.
       - **router**: Router implementations.
         - **\_\_init\_\_.py**: Initialization file.

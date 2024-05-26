@@ -1,4 +1,4 @@
-from src.koc_finans_case.api import *
+from src.ml_engineer_case.api import *
 from fastapi import FastAPI
 
 

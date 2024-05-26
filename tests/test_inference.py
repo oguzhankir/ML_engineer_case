@@ -1,8 +1,8 @@
 import unittest
 
-from src.koc_finans_case.api.request_dto import *
-from src.koc_finans_case.operators.inference import Inference
-from src.koc_finans_case.utils.utils import get_config
+from src.ml_engineer_case.api.request_dto import *
+from src.ml_engineer_case.operators.inference import Inference
+from src.ml_engineer_case.utils.utils import get_config
 
 
 class InferenceTest(unittest.TestCase):
