@@ -23,3 +23,7 @@ TestResults.xml
 /notebooks/loan_approval_dataset.csv
 /notebooks/catboost_info/
 /notebooks/.ipynb_checkpoints/
+/notebooks/encoders/.ipynb_checkpoints/
+/notebooks/models/.ipynb_checkpoints/
+/catboost_info/
+/tests/catboost_info/

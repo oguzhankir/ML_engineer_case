@@ -1,4 +1,3 @@
-import os
 import pickle
 
 import category_encoders as ce
@@ -10,37 +9,67 @@ from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 
+from ..utils.exceptions import *
+from ..utils.logger import AppLogger
 from ..utils.utils import *
+
+logger = AppLogger(__name__).get_logger()
 
 
 def select_features_with_cv(df, n_splits=5):
-    X = df.drop(["loan_status", "loan_id"], axis=1)
-    y = df["loan_status"]
+    """
+    Select features using cross-validation.
 
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    This function selects features using cross-validation and the Recursive Feature
+    Elimination (RFE) method with a CatBoostClassifier model.
 
-    feature_importances = []
+    Args:
+    - df (DataFrame): Input DataFrame containing the data.
+    - n_splits (int): Number of cross-validation splits. Default is 5.
 
-    for train_index, val_index in skf.split(X, y):
-        X_train, X_val = X.iloc[train_index], X.iloc[val_index]
-        y_train, y_val = y.iloc[train_index], y.iloc[val_index]
+    Returns:
+    - list: List of selected features.
+    """
+    try:
+        logger.info("Starting feature selection with cross-validation")
 
-        model = CatBoostClassifier()
+        X = df.drop(["loan_status", "loan_id"], axis=1)
+        y = df["loan_status"]
 
-        rfe_dict = model.select_features(X=Pool(X_train, y_train),
-                                         eval_set=Pool(X_val, y_val),
-                                         features_for_select=f"0-{len(X.columns.tolist()) - 1}",
-                                         num_features_to_select=len(X.columns.tolist()) - 3,
-                                         steps=5,
-                                         verbose=False,
-                                         train_final_model=False,
-                                         plot=True)
+        skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        feature_importances = []
 
-        feature_importances.append(rfe_dict['selected_features_names'])
+        for fold, (train_index, val_index) in enumerate(skf.split(X, y)):
+            logger.info(f"Processing fold {fold + 1}/{n_splits}")
 
-    selected_features = set.intersection(*map(set, feature_importances))
+            X_train, X_val = X.iloc[train_index], X.iloc[val_index]
+            y_train, y_val = y.iloc[train_index], y.iloc[val_index]
 
-    return list(selected_features)
+            model = CatBoostClassifier()
+            logger.info(f"Training model on fold {fold + 1}")
+
+            rfe_dict = model.select_features(
+                X=Pool(X_train, y_train),
+                eval_set=Pool(X_val, y_val),
+                features_for_select=f"0-{len(X.columns.tolist()) - 1}",
+                num_features_to_select=len(X.columns.tolist()) - 3,
+                steps=5,
+                verbose=False,
+                train_final_model=False,
+                plot=True
+            )
+
+            logger.info(f"Feature selection completed for fold {fold + 1}")
+            feature_importances.append(rfe_dict['selected_features_names'])
+
+        selected_features = set.intersection(*map(set, feature_importances))
+        logger.info(f"Selected features: {selected_features}")
+
+        return list(selected_features)
+
+    except Exception as e:
+        logger.error(f"Feature selection error: {str(e)}")
+        raise FeatureSelectionException("Error during feature selection with cross-validation") from e
 
 
 class EncoderEvaluator:
@@ -51,7 +80,6 @@ class EncoderEvaluator:
         self.X = dataframe.drop(columns=[target_column])
         self.y = dataframe[target_column]
         self.encoders = {
-            # 'onehot': OneHotEncoder(),
             'label': LabelEncoder(),
             'ordinal': ce.OrdinalEncoder(),
             'catboost': ce.CatBoostEncoder(),
@@ -59,38 +87,79 @@ class EncoderEvaluator:
         }
 
     def evaluate_encoders(self):
+        """
+        Evaluate different encoders and return the best one based on cross-validation scores.
+
+        This method evaluates several encoders, calculates cross-validation scores, and identifies
+        the best performing encoder based on average accuracy.
+
+        Returns:
+            best_encoder (str): Name of the best performing encoder.
+            results (dict): Dictionary containing the average scores for each encoder.
+        """
         results = {}
-        for encoder_name, encoder in self.encoders.items():
-            print(f"Evaluating with {encoder_name} encoder...")
-            if encoder_name == 'label':
-                # LabelEncoder only applies to a single column at a time, so we need to encode them separately
-                X_encoded = self.X.copy()
-                for col in self.categorical_columns:
-                    X_encoded[col] = LabelEncoder().fit_transform(self.X[col])
-                scores = self._evaluate_model(X_encoded)
-            else:
-                # For other encoders we can use ColumnTransformer
-                preprocessor = ColumnTransformer(
-                    transformers=[
-                        ('encoder', encoder, self.categorical_columns)
-                    ],
-                    remainder='passthrough'  # passthrough to keep the other columns unchanged
-                )
-                pipeline = Pipeline(steps=[
-                    ('preprocessor', preprocessor),
-                    ('classifier', CatBoostClassifier(silent=True))
-                ])
-                scores = cross_val_score(pipeline, self.X, self.y, cv=5, scoring='accuracy')
+        try:
+            logger.info("Starting encoder evaluation")
 
-            results[encoder_name] = scores.mean()
+            for encoder_name, encoder in self.encoders.items():
+                logger.info(f"Evaluating encoder: {encoder_name}")
 
-        best_encoder = max(results, key=results.get)
-        return best_encoder, results
+                if encoder_name == 'label':
+                    # LabelEncoder only applies to a single column at a time, so we need to encode them separately
+                    X_encoded = self.X.copy()
+                    for col in self.categorical_columns:
+                        X_encoded[col] = LabelEncoder().fit_transform(self.X[col])
+                    scores = self._evaluate_model(X_encoded)
+                else:
+                    # For other encoders we can use ColumnTransformer
+                    preprocessor = ColumnTransformer(
+                        transformers=[
+                            ('encoder', encoder, self.categorical_columns)
+                        ],
+                        remainder='passthrough'  # passthrough to keep the other columns unchanged
+                    )
+                    pipeline = Pipeline(steps=[
+                        ('preprocessor', preprocessor),
+                        ('classifier', CatBoostClassifier(silent=True))
+                    ])
+                    scores = cross_val_score(pipeline, self.X, self.y, cv=5, scoring='accuracy')
+
+                results[encoder_name] = scores.mean()
+                logger.info(f"Encoder: {encoder_name}, Score: {results[encoder_name]}")
+
+            best_encoder = max(results, key=results.get)
+            logger.info(f"Best encoder: {best_encoder}")
+
+            return best_encoder, results
+
+        except Exception as e:
+            logger.error(f"Encoder evaluation error: {str(e)}")
+            raise EncoderEvaluationException("Error during encoder evaluation") from e
 
     def _evaluate_model(self, X):
-        model = CatBoostClassifier(silent=True)
-        scores = cross_val_score(model, X, self.y, cv=5, scoring='accuracy')
-        return scores
+        """
+        Evaluate model performance using cross-validation.
+
+        This method trains a CatBoostClassifier on the provided data and evaluates it using
+        cross-validation, returning the accuracy scores.
+
+        Args:
+            X (pd.DataFrame): Encoded feature dataframe.
+
+        Returns:
+            scores (np.ndarray): Cross-validation accuracy scores.
+        """
+        try:
+            logger.info("Evaluating model performance")
+            model = CatBoostClassifier(silent=True)
+            scores = cross_val_score(model, X, self.y, cv=3, scoring='accuracy')
+            logger.info(f"Model evaluation scores: {scores}")
+
+            return scores
+
+        except Exception as e:
+            logger.error(f"Model evaluation error: {str(e)}")
+            raise EncoderEvaluationException("Error during model evaluation") from e
 
 
 class Preprocess:
@@ -161,7 +230,8 @@ class Preprocess:
                     encoder = self.encoders[best_encoder]
                     encoder.fit(self.df[col])
                     self.df[col] = encoder.transform(self.df[col])
-                    self.write_encoder(encoder, f"{col}_{self.encoder_path}")
+                    self.write_encoder(encoder, "/".join(
+                        self.encoder_path.split("/")[:-1] + [f"{col}_{self.encoder_path.split('/')[-1]}"]))
             except:
                 for col in cats:
                     encoder = self.encoders[best_encoder]
@@ -187,10 +257,12 @@ class Preprocess:
         self.df['debt_service_ratio'] = (self.df['loan_amount'] / self.df['loan_term']) / self.df['income_annum']
 
     def execute(self):
-        self.fix_column_names()
-        self.fix_categorical_features()
-        self.extract_features()
-        self.encode_categorical()
-        # self._object_to_category()
-
-        return self.df
+        try:
+            self.fix_column_names()
+            self.fix_categorical_features()
+            self.extract_features()
+            self.encode_categorical()
+            return self.df
+        except Exception as e:
+            logger.error(f"Preprocessing error: {str(e)}")
+            raise PreprocessingException("Error during preprocessing") from e
